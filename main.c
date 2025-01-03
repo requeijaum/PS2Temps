@@ -10,63 +10,65 @@
 #include <libcdvd.h>
 
 int PrintTemperature() {
-	
-	// Based on PS2Ident libxcdvd from SP193
-	unsigned char in_buffer[1], out_buffer[16];
-	int result;
-	int stat = 0;
+    unsigned char in_buffer[1], out_buffer[16];
+    int result;
+    int stat = 0;
+    u16 inBuffSize = sizeof(in_buffer);
 
-    memset(&out_buffer, 0, 16);
-	
-	in_buffer[0]= 0xEF;
-	if((result=sceCdApplySCmd(0x03, in_buffer, sizeof(in_buffer), out_buffer, sizeof(out_buffer)))!=0)
-	{
-		stat=out_buffer[0];
-	}
-    
-	if( !stat) {
-		unsigned short temp = out_buffer[1] * 256 + out_buffer[2];
-		scr_printf("  Temp: %2d.%2d  C \n",  (temp - (temp%128) ) / 128  , (temp%128)      );
-		return 1;
-		
-	}else{
-		
-		scr_printf("Failed 0x03 0xEF command. stat=%x \n", stat);
-		return 0;
-		
-	}
+    memset(out_buffer, 0, sizeof(out_buffer));
+    in_buffer[0] = 0xEF;
 
+    result = sceCdApplySCmd(0x03, in_buffer, inBuffSize, out_buffer);
+    if (result != 0) {
+        stat = out_buffer[0];
+    }
+
+    if (!stat) {
+        unsigned short temp = out_buffer[1] * 256 + out_buffer[2];
+        scr_printf("Temperature: %2d.%2d °C\n", temp / 128, temp % 128);
+        return 1;
+    } else {
+        scr_printf("Failed to execute command. Status=0x%x\n", stat);
+        return 0;
+    }
 }
 
-
 int main(int argc, char *argv[]) {
-   
-
     SifInitRpc(0);
-	SifIopReset("", 0);
-	while(!SifIopSync()){}
-	SifInitRpc(0);
-	SifLoadFileInit();
-	fioInit(); 
-	
-   init_scr();
- 
-   scr_printf("Reset IOP done. ");
-    
-   int ret;
-   
-   ret = SifLoadModule("rom0:SIO2MAN", 0, NULL);
-   ret = SifLoadModule("rom0:CDVDMAN", 0, NULL);
-   ret = SifLoadModule("rom0:CDVDFSV", 0, NULL);
- 
-   scr_printf("All modules loaded.\n");
-   
-   for(ret = 0; ret < 0x10; ret++) 
-	        PrintTemperature();
-   
+    SifIopReset("", 0);
+    while (!SifIopSync()) {}
+    SifInitRpc(0);
+    SifLoadFileInit();
 
-   SleepThread();
-  
-  return 0;
- 
+    init_scr();
+
+    scr_printf("IOP Reset completed.\n");
+
+    if (SifLoadModule("rom0:SIO2MAN", 0, NULL) < 0) {
+        scr_printf("Failed to load SIO2MAN module.\n");
+        return -1;
+    }
+    if (SifLoadModule("rom0:CDVDMAN", 0, NULL) < 0) {
+        scr_printf("Failed to load CDVDMAN module.\n");
+        return -1;
+    }
+    if (SifLoadModule("rom0:CDVDFSV", 0, NULL) < 0) {
+        scr_printf("Failed to load CDVDFSV module.\n");
+        return -1;
+    }
+
+    scr_printf("Modules loaded successfully.\n");
+
+    for (int i = 0; i < 10; i++) {
+        scr_printf("Reading temperature... (%d/10)\n", i + 1);
+        if (!PrintTemperature()) {
+            scr_printf("Error reading temperature.\n");
+        }
+        sleep(1);
+    }
+
+    scr_printf("Finished temperature readings.\n");
+
+    SleepThread();
+    return 0;
 }
